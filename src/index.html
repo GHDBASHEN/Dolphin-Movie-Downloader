@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Movie Downloader</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Movie Downloader</h1>
+        
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search for movies (e.g. Iron Man)...">
+            <button onclick="search()">Search</button>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="results-container">
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Size</th>
+                        <th>Seeds</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody">
+                    </tbody>
+            </table>
+        </div>
+        
+        <button class="folder-btn" onclick="window.api.openFolder()">📂 Open Downloads Folder</button>
+    </div>
+    <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "movie-downloader-desktop",
+  "version": "1.0.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GHDBASHEN/Popcorn-Time-Desktop-Movie-Downloader.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/GHDBASHEN/Popcorn-Time-Desktop-Movie-Downloader/issues"
+  },
+  "homepage": "https://github.com/GHDBASHEN/Popcorn-Time-Desktop-Movie-Downloader#readme",
+  "dependencies": {
+    "electron": "^39.2.6",
+    "torrent-search-api": "^2.1.4",
+    "webtorrent": "^1.9.7"
+  }
+}
