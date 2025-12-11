@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Movie Downloader</title>
+    <title>Movie Download Manger</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎬 Movie Downloader</h1>
+            <h1>God's Eye Movie Downloader</h1>
             <button class="toggle-downloads-btn" onclick="toggleSidebar()">
                 <i class="fas fa-download"></i> Downloads
                 <span id="activeCount" class="badge" style="display:none">0</span>
@@ -20,6 +20,31 @@
             <button onclick="search()" class="primary-btn">Search</button>
         </div>
 
+        <div class="filter-bar">
+            <div class="filter-group">
+                <label>Quality:</label>
+                <select id="qualityFilter" onchange="applyFilters()">
+                    <option value="all">All Qualities</option>
+                    <option value="2160p">4K / 2160p</option>
+                    <option value="1080p">1080p</option>
+                    <option value="720p">720p</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Sort By:</label>
+                <select id="sortFilter" onchange="applyFilters()">
+                    <option value="seeds_desc">Seeds: High to Low</option>
+                    <option value="seeds_asc">Seeds: Low to High</option>
+                    <option value="size_desc">Size: Large to Small</option>
+                    <option value="size_asc">Size: Small to Large</option>
+                </select>
+            </div>
+            
+            <span id="resultCount" class="filter-stats">0 results</span>
+        </div>
+
+        <div class="results-container">
         <div class="results-container">
             <table id="resultsTable">
                 <thead>

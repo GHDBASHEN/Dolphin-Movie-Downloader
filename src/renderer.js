@@ -1,5 +1,8 @@
-let currentResults = [];
-let allSearchResults = []; // Stores the full list (e.g., 100 items)
+let activeDownloads = new Map();
+
+// DATA STORAGE
+let allSearchResults = []; // Raw list from backend (100 items)
+let filteredResults = [];  // List after filters applied (e.g. 20 items)
 let currentPage = 0;
 const RESULTS_PER_PAGE = 20;
 
@@ -34,20 +37,61 @@ async function search() {
     // Reset Data
     currentPage = 0;
     allSearchResults = [];
+    filteredResults = [];
 
     // Fetch from Backend
     const results = await window.api.searchMovies(query);
     allSearchResults = results;
-    currentResults = results; // Keep for download referencing
-
+    
     btn.innerText = "Search";
 
     if (results.length === 0) {
         table.innerHTML = "<tr><td colspan='4'>No results found (Check VPN).</td></tr>";
+        document.getElementById('resultCount').innerText = "0 results";
         return;
     }
 
-    // Render FIRST Page
+    // Instead of rendering directly, we apply filters first
+    applyFilters();
+}
+
+function applyFilters() {
+    // 1. Get Filter Values
+    const quality = document.getElementById('qualityFilter').value;
+    const sort = document.getElementById('sortFilter').value;
+
+    // 2. Filter by Quality
+    let temp = allSearchResults.filter(t => {
+        if (quality === 'all') return true;
+        // Check if title contains "1080p", "720p", etc.
+        return t.title.toLowerCase().includes(quality);
+    });
+
+    // 3. Sort Logic
+    temp.sort((a, b) => {
+        if (sort === 'seeds_desc') return b.seeds - a.seeds;
+        if (sort === 'seeds_asc') return a.seeds - b.seeds;
+        
+        // Helper to parse size string "1.2 GB" -> number
+        const parseSize = (str) => {
+            const num = parseFloat(str);
+            if (str.includes('GB')) return num * 1024;
+            return num; // MB
+        };
+
+        if (sort === 'size_desc') return parseSize(b.size) - parseSize(a.size);
+        if (sort === 'size_asc') return parseSize(a.size) - parseSize(b.size);
+    });
+
+    // 4. Update State & Reset Page
+    filteredResults = temp;
+    currentPage = 0;
+    
+    // Update Stats text
+    document.getElementById('resultCount').innerText = `${filteredResults.length} results`;
+
+    // 5. Render
+    document.getElementById('resultsBody').innerHTML = ""; // Clear table
     renderPage();
 }
 
@@ -60,19 +104,15 @@ function renderPage() {
     const table = document.getElementById('resultsBody');
     const loadMoreDiv = document.getElementById('loadMoreContainer');
 
-    // Calculate slice indices
     const start = currentPage * RESULTS_PER_PAGE;
     const end = start + RESULTS_PER_PAGE;
     
-    // Get next batch of items
-    const itemsToShow = allSearchResults.slice(start, end);
+    // IMPORTANT: Use 'filteredResults' here, NOT 'allSearchResults'
+    const itemsToShow = filteredResults.slice(start, end);
 
     itemsToShow.forEach((t, i) => {
-        // Calculate global index so download button grabs correct item
-        const globalIndex = start + i;
-        
-        // Ensure the item has an ID (if not already set)
-        if (!t.id) t.id = `search-${globalIndex}-${Date.now()}`;
+        // We use the actual ID from the object because array index changes after sorting
+        if (!t.id) t.id = `search-${Math.random().toString(36).substr(2, 9)}`;
 
         const row = `
             <tr>
@@ -80,7 +120,7 @@ function renderPage() {
                 <td>${t.size}</td>
                 <td>🟢 ${t.seeds}</td>
                 <td>
-                    <button class="download-btn" onclick="startDownload(${globalIndex})">
+                    <button class="download-btn" onclick="startDownload('${t.id}')">
                         <i class="fas fa-download"></i> Download
                     </button>
                 </td>
@@ -89,8 +129,7 @@ function renderPage() {
         table.innerHTML += row;
     });
 
-    // Show/Hide "Load More" Button
-    if (end < allSearchResults.length) {
+    if (end < filteredResults.length) {
         loadMoreDiv.style.display = "block";
     } else {
         loadMoreDiv.style.display = "none";
@@ -98,16 +137,13 @@ function renderPage() {
 }
 // --- DOWNLOAD MANAGER LOGIC ---
 
-function startDownload(index) {
-    const torrent = currentResults[index];
+function startDownload(id) {
+    // Find item in the filtered list using the ID
+    const torrent = filteredResults.find(t => t.id === id);
+    if (!torrent) return;
     
-    // 1. Add to Sidebar UI
     addToSidebar(torrent);
-
-    // 2. Open Sidebar so user sees it
     document.getElementById('downloadSidebar').classList.add('open');
-
-    // 3. Tell Backend to Start
     window.api.startDownload(torrent);
 }
 
@@ -195,7 +231,6 @@ function cancel(id) {
     if(torrent.magnet) {
         window.api.cancelDownload(torrent.magnet);
     } else {
-        // If no magnet yet (still fetching), we just remove from UI
         console.log("Canceling before magnet fetch...");
     }
 
@@ -239,12 +274,7 @@ window.api.onProgress((data) => {
 });
 
 window.api.onComplete((data) => {
-    // Show notification
     new Notification('Download Complete', { body: data.title });
-    
-    // Update card style to show complete
-    // You might want to remove the Pause button here
-    // But for now, we just leave it.
 });
 
 // --- NEW LISTENER: CAPTURE MAGNET IMMEDIATELY ---
@@ -254,9 +284,6 @@ window.api.onStarted((data) => {
     if (torrent) {
         console.log(`🔗 Magnet received for ${data.id}`);
         torrent.magnet = data.magnet; // Save it!
-        
-        // Update the card to ensure buttons have the magnet
-        // We re-render the buttons just to be safe
         updateCardButtons(data.id, data.magnet);
     }
 });
@@ -264,9 +291,21 @@ window.api.onStarted((data) => {
 // Helper to refresh buttons with the correct magnet
 function updateCardButtons(id, magnet) {
     const pauseBtn = document.getElementById(`btn-pause-${id}`);
-    const cancelBtn = document.querySelector(`#card-${id} .btn-cancel`);
-
     if (pauseBtn) {
         pauseBtn.setAttribute('onclick', `pause('${id}')`);
     }
 }
+
+// --- NEW: ERROR HANDLING ---
+window.api.onError((data) => {
+    // data = { id, message }
+    const card = document.getElementById(`card-${data.id}`);
+    
+    if (card) {
+        // Change progress text to red error message
+        const progressText = document.getElementById(`speed-${data.id}`);
+        if(progressText) {
+            progressText.innerHTML = `<span style="color:#ff4444">⚠️ ${data.message}</span>`;
+        }
+    }
+});

@@ -93,21 +93,29 @@ ipcMain.on('resume-download', (event, torrentData) => {
 async function startTorrent(event, torrentData) {
   const config = loadConfig();
   
-  // 1. Get Magnet (Fetch if needed, or use existing from Resume)
+  // 1. Get Magnet
   let magnet = torrentData.magnet;
   if (!magnet) {
       try {
           console.log(`🧲 Fetching magnet for: ${torrentData.title}`);
           magnet = await TorrentSearchApi.getMagnet(torrentData);
+          
+          if (!magnet) throw new Error("Magnet link not found (Source might be blocked).");
+
       } catch (e) {
           console.error("Failed to fetch magnet:", e);
+          // NEW: Send error back to UI
+          mainWindow.webContents.send('download-error', { 
+              id: torrentData.id, 
+              message: "Failed to get Magnet Link. Try a VPN." 
+          });
           return;
       }
   }
 
   const finalPath = config.downloadPath;
 
-  // 2. Check duplicates (If already downloading, ignore)
+  // 2. Check duplicates
   if (client.get(magnet)) {
       console.log("⚠️ Torrent already active.");
       return; 
@@ -117,13 +125,12 @@ async function startTorrent(event, torrentData) {
   client.add(magnet, { path: finalPath }, (torrent) => {
     console.log(`✅ Download started: ${torrentData.title}`);
 
-    // 4. CRITICAL: Send Magnet to UI immediately so Pause/Cancel works
     mainWindow.webContents.send('download-started', {
         id: torrentData.id,
         magnet: magnet
     });
     
-    // Progress Loop (Updates every 1 second)
+    // Progress Loop
     const interval = setInterval(() => {
         if (!mainWindow || torrent.destroyed) return clearInterval(interval);
         
@@ -132,7 +139,7 @@ async function startTorrent(event, torrentData) {
             progress: (torrent.progress * 100).toFixed(1),
             speed: (torrent.downloadSpeed / 1024 / 1024).toFixed(2),
             peers: torrent.numPeers,
-            magnet: magnet // Keep sending it just in case
+            magnet: magnet 
         });
 
         if (torrent.progress === 1) clearInterval(interval);
@@ -140,6 +147,14 @@ async function startTorrent(event, torrentData) {
 
     torrent.on('done', () => {
       mainWindow.webContents.send('download-complete', { title: torrentData.title });
+    });
+    
+    // NEW: Handle Download Errors (e.g. No Peers)
+    torrent.on('error', (err) => {
+        mainWindow.webContents.send('download-error', { 
+            id: torrentData.id, 
+            message: "Download Error: " + err.message 
+        });
     });
   });
 }
