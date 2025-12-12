@@ -171,7 +171,9 @@ async function startTorrent(event, torrentData) {
         mainWindow.webContents.send('download-progress', {
             id: torrentData.id,
             progress: (torrent.progress * 100).toFixed(1),
-            speed: (torrent.downloadSpeed / 1024 / 1024).toFixed(2),
+            speed: (torrent.downloadSpeed / 1024 / 1024).toFixed(2), // MB/s
+            downloaded: torrent.downloaded, // New: Bytes downloaded
+            total: torrent.length,          // New: Total file size
             peers: torrent.numPeers,
             magnet: magnet 
         });

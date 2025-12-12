@@ -12,6 +12,14 @@ window.onload = async () => {
     document.getElementById('pathDisplay').value = config.downloadPath;
 };
 
+// Helper: Convert bytes to readable size (MB, GB)
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 function toggleSidebar() {
     document.getElementById('downloadSidebar').classList.toggle('open');
 }
@@ -149,14 +157,9 @@ function startDownload(id) {
 
 function addToSidebar(torrent) {
     const list = document.getElementById('downloadList');
-    
-    // Remove empty state if exists
     if(list.querySelector('.empty-state')) list.innerHTML = '';
 
-    // Create Card HTML
     const cardId = `card-${torrent.id}`;
-    
-    // Prevent duplicates in UI
     if(document.getElementById(cardId)) return;
 
     const cardHTML = `
@@ -165,6 +168,7 @@ function addToSidebar(torrent) {
             
             <div class="progress-info">
                 <span id="speed-${torrent.id}">0 MB/s</span>
+                <span id="size-${torrent.id}" style="color:#888; font-size:11px;">Waiting...</span>
                 <span id="percent-${torrent.id}">0%</span>
             </div>
             
@@ -183,9 +187,7 @@ function addToSidebar(torrent) {
         </div>
     `;
 
-    list.innerHTML = cardHTML + list.innerHTML; // Add to top
-    
-    // Store in map
+    list.innerHTML = cardHTML + list.innerHTML;
     activeDownloads.set(torrent.id, torrent);
     updateBadge();
 }
@@ -255,21 +257,26 @@ function updateBadge() {
 // --- LISTENERS ---
 
 window.api.onProgress((data) => {
-    // data has: id, progress, speed, magnet
     const torrent = activeDownloads.get(data.id);
     
     if (torrent) {
-        // Save magnet for pause/resume actions
         if(!torrent.magnet) torrent.magnet = data.magnet;
 
-        // Update UI
         const bar = document.getElementById(`bar-${data.id}`);
         const percentText = document.getElementById(`percent-${data.id}`);
         const speedText = document.getElementById(`speed-${data.id}`);
+        const sizeText = document.getElementById(`size-${data.id}`); // Get the new element
 
         if(bar) bar.style.width = `${data.progress}%`;
         if(percentText) percentText.innerText = `${data.progress}%`;
         if(speedText) speedText.innerText = `${data.speed} MB/s`;
+
+        // NEW: Update Size Text (e.g. "450 MB / 1.2 GB")
+        if (sizeText && data.total) {
+            const downStr = formatBytes(data.downloaded);
+            const totalStr = formatBytes(data.total);
+            sizeText.innerText = `${downStr} / ${totalStr}`;
+        }
     }
 });
 
