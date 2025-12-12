@@ -33,6 +33,8 @@ if (!gotTheLock) {
   });
 }
 
+
+
 // --- HELPER: LOAD/SAVE CONFIG ---
 function loadConfig() {
     try {
@@ -49,9 +51,32 @@ function saveConfig(config) {
 
 // --- WINDOW CREATION ---
 function createWindow() {
+  
+  // 1. Create SPLASH Window
+  const splash = new BrowserWindow({
+    width: 500,
+    height: 350,
+    transparent: true, 
+    frame: false,
+    alwaysOnTop: true,
+    icon: path.join(__dirname, '../icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true
+    }
+  });
+  
+  splash.loadFile('src/splash.html');
+
+  splash.webContents.once('did-finish-load', () => {
+      splash.webContents.send('app-version', app.getVersion());
+      });
+
+  // 2. Create MAIN Window (Hidden)
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 800,
+    show: false, 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -59,8 +84,83 @@ function createWindow() {
     }
   });
   
-  mainWindow.setMenuBarVisibility(false); // Optional: Hides top menu
+  mainWindow.setMenuBarVisibility(false);
   mainWindow.loadFile('src/index.html');
+
+  // --- UPDATE CHECK LOGIC ---
+  
+  const sendStatus = (text) => {
+      // Check if splash still exists before sending
+      if (splash && !splash.isDestroyed()) {
+        try { splash.webContents.send('update-status', text); } catch (e) {}
+      }
+  };
+
+  // Helper to safely switch windows
+  const launchMainApp = () => {
+      if (splash && !splash.isDestroyed()) {
+          splash.destroy();
+          mainWindow.show();
+      }
+  };
+
+  splash.webContents.once('did-finish-load', () => {
+      
+      // FIX 1: SKIP UPDATES IF IN DEV MODE
+      // 'app.isPackaged' is true only in built production apps (.exe/.dmg)
+      if (!app.isPackaged) {
+          sendStatus("Dev Mode: Launching...");
+          setTimeout(launchMainApp, 1500); 
+          return; // Stop here, don't run the updater
+      }
+
+      sendStatus("Checking for updates...");
+      
+      // FIX 2: SAFETY TIMEOUT
+      // If the updater hangs for 10 seconds, force the app to open
+      setTimeout(() => {
+          console.log("Updater timed out. Forcing launch.");
+          launchMainApp();
+      }, 10000);
+
+      // Start the check
+      autoUpdater.checkForUpdatesAndNotify().catch(err => {
+          console.log("Update check issue:", err);
+          // Don't launch here, let the 'error' event or timeout handle it
+      });
+  });
+
+  // Event: No Update Found (Launch App)
+  autoUpdater.on('update-not-available', () => {
+      sendStatus("Up to date! Launching...");
+      setTimeout(launchMainApp, 1500);
+  });
+
+  // Event: Update Found (Download it)
+  autoUpdater.on('update-available', () => {
+      sendStatus("New version found. Downloading...");
+  });
+
+  // Event: Downloading Progress
+  autoUpdater.on('download-progress', (progressObj) => {
+      const log_message = `Downloading: ${progressObj.percent.toFixed(0)}%`;
+      sendStatus(log_message);
+  });
+
+  // Event: Update Downloaded (Restart)
+  autoUpdater.on('update-downloaded', () => {
+      sendStatus("Update Ready. Restarting...");
+      setTimeout(() => {
+          autoUpdater.quitAndInstall();
+      }, 2000);
+  });
+
+  // Event: Error (Launch App anyway)
+  autoUpdater.on('error', (err) => {
+      sendStatus("Update check failed. Launching...");
+      console.log(err);
+      setTimeout(launchMainApp, 2000);
+  });
 }
 
 // --- HANDLER 1: SEARCH MOVIES ---

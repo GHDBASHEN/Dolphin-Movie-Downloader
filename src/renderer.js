@@ -1,22 +1,25 @@
 let activeDownloads = new Map();
 let currentSearchTimestamp = 0;
+
 // DATA STORAGE
-let allSearchResults = []; // Raw list from backend (100 items)
-let filteredResults = [];  // List after filters applied (e.g. 20 items)
+let allSearchResults = []; 
+let filteredResults = [];  
 let currentPage = 0;
 const RESULTS_PER_PAGE = 20;
 
 // --- INITIALIZATION ---
 window.onload = async () => {
     const config = await window.api.getConfig();
-    document.getElementById('pathDisplay').value = config.downloadPath;
+    if(document.getElementById('pathDisplay')) {
+        document.getElementById('pathDisplay').value = config.downloadPath;
+    }
 };
 
 function handleEnter(e) {
     if (e.key === 'Enter') search();
 }
 
-// Helper: Convert bytes to readable size (MB, GB)
+// Helper: Convert bytes to readable size
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -33,59 +36,65 @@ async function changeFolder() {
     if (newPath) document.getElementById('pathDisplay').value = newPath;
 }
 
+// ---------------------------------------------------------
+// SEARCH LOGIC
+// ---------------------------------------------------------
 async function search() {
     const query = document.getElementById('searchInput').value;
     const searchBtn = document.getElementById('searchBtn');
     const cancelBtn = document.getElementById('cancelSearchBtn');
-    const table = document.getElementById('resultsBody');
+    
+    // Get the UI elements
+    const tableContainer = document.querySelector('.results-container'); // The wrapper
+    const emptyState = document.getElementById('emptyState');
+    const tbody = document.getElementById('resultsBody');
     const loadMoreDiv = document.getElementById('loadMoreContainer');
     
     if(!query) return;
 
-    // 1. GENERATE ID for this specific search
     const mySearchId = Date.now();
     currentSearchTimestamp = mySearchId;
 
-    // 2. UPDATE UI: Show Cancel, Hide Search
+    // UI UPDATES:
     searchBtn.style.display = 'none';
-    cancelBtn.style.display = 'inline-block'; // Show Cancel
+    cancelBtn.style.display = 'inline-block';
     
-    table.innerHTML = ""; 
+    // 1. Hide Empty State immediately
+    emptyState.style.display = 'none'; 
+    
+    // 2. Clear table and Hide it while loading
+    tbody.innerHTML = ""; 
+    tableContainer.style.display = 'none'; 
+    
     document.getElementById('resultCount').innerText = "Searching...";
     loadMoreDiv.style.display = "none";
     
-    // Reset Data
     currentPage = 0;
     allSearchResults = [];
     filteredResults = [];
 
     try {
-        // 3. CALL BACKEND (This takes time)
         const results = await window.api.searchMovies(query);
         
-        // 4. CHECK: Is this still the active search?
-        // If user clicked "Cancel" or started a NEW search, this ID won't match.
-        if (currentSearchTimestamp !== mySearchId) {
-            console.log("Old search result ignored.");
-            return; 
-        }
+        if (currentSearchTimestamp !== mySearchId) return;
 
         allSearchResults = results;
 
         if (results.length === 0) {
-            table.innerHTML = "<tr><td colspan='4'>No results found (Check VPN).</td></tr>";
-            document.getElementById('resultCount').innerText = "0 results";
+            document.getElementById('resultCount').innerText = "0 results found.";
+            // If no results, show Empty State again (or a specific 'No Results' view)
+            emptyState.style.display = 'block';
+            emptyState.innerHTML = '<i class="fas fa-search-minus" style="font-size: 48px; margin-bottom: 10px;"></i><p>No results found</p>';
         } else {
-            // Apply filters and render
             applyFilters();
         }
 
     } catch (err) {
         if (currentSearchTimestamp === mySearchId) {
-            table.innerHTML = "<tr><td colspan='4'>Error occurred during search.</td></tr>";
+            document.getElementById('resultCount').innerText = "Error occurred.";
+            emptyState.style.display = 'block'; // Show state on error
         }
     } finally {
-        // 5. RESET UI (Only if this is still the active search)
         if (currentSearchTimestamp === mySearchId) {
             searchBtn.style.display = 'inline-block';
             cancelBtn.style.display = 'none';
@@ -94,18 +103,20 @@ async function search() {
 }
 
 function cancelSearch() {
-    // 1. Invalidate the current search
     currentSearchTimestamp = 0;
-
-    // 2. Reset UI immediately
     document.getElementById('searchBtn').style.display = 'inline-block';
     document.getElementById('cancelSearchBtn').style.display = 'none';
-    
-    // 3. Show message
-    const table = document.getElementById('resultsBody');
-    table.innerHTML = "<tr><td colspan='4' style='color:#ffc107'>⚠️ Search Cancelled by user.</td></tr>";
     document.getElementById('resultCount').innerText = "";
+
+    // SWITCH LOGIC: Hide Table, Show Empty State
+    document.querySelector('.results-container').style.display = 'none';
+    
+    const emptyState = document.getElementById('emptyState');
+    emptyState.style.display = 'block';
+    // Reset text back to original
+    emptyState.innerHTML = '<i class="fas fa-film" style="font-size: 48px; margin-bottom: 10px;"></i><p>Ready to search</p>';
 }
+
 
 function applyFilters() {
     // 1. Get Filter Values
@@ -115,7 +126,6 @@ function applyFilters() {
     // 2. Filter by Quality
     let temp = allSearchResults.filter(t => {
         if (quality === 'all') return true;
-        // Check if title contains "1080p", "720p", etc.
         return t.title.toLowerCase().includes(quality);
     });
 
@@ -124,7 +134,6 @@ function applyFilters() {
         if (sort === 'seeds_desc') return b.seeds - a.seeds;
         if (sort === 'seeds_asc') return a.seeds - b.seeds;
         
-        // Helper to parse size string "1.2 GB" -> number
         const parseSize = (str) => {
             const num = parseFloat(str);
             if (str.includes('GB')) return num * 1024;
@@ -143,7 +152,7 @@ function applyFilters() {
     document.getElementById('resultCount').innerText = `${filteredResults.length} results`;
 
     // 5. Render
-    document.getElementById('resultsBody').innerHTML = ""; // Clear table
+    document.getElementById('resultsBody').innerHTML = ""; // Clear rows
     renderPage();
 }
 
@@ -153,24 +162,39 @@ function loadMore() {
 }
 
 function renderPage() {
-    const table = document.getElementById('resultsBody');
+    const tableContainer = document.querySelector('.results-container');
+    const tbody = document.getElementById('resultsBody');
     const loadMoreDiv = document.getElementById('loadMoreContainer');
+    const emptyState = document.getElementById('emptyState');
+
+    // SWITCH LOGIC:
+    if (filteredResults.length > 0) {
+        // ✅ CORRECT FIX: Use 'flex' so the scrollbar works!
+        tableContainer.style.display = "flex"; 
+        emptyState.style.display = "none";
+    } else {
+        tableContainer.style.display = "none";
+        emptyState.style.display = "block";
+        return;
+    }
 
     const start = currentPage * RESULTS_PER_PAGE;
     const end = start + RESULTS_PER_PAGE;
-    
-    // IMPORTANT: Use 'filteredResults' here, NOT 'allSearchResults'
     const itemsToShow = filteredResults.slice(start, end);
 
-    itemsToShow.forEach((t, i) => {
-        // We use the actual ID from the object because array index changes after sorting
+    itemsToShow.forEach((t) => {
         if (!t.id) t.id = `search-${Math.random().toString(36).substr(2, 9)}`;
+
+        // Use the formatBytes helper if available, else raw size
+        let displaySize = (typeof formatBytes === 'function' && !isNaN(t.size)) 
+                          ? formatBytes(t.size) 
+                          : t.size;
 
         const row = `
             <tr>
                 <td>${t.title}</td>
-                <td>${t.size}</td>
-                <td>🟢 ${t.seeds}</td>
+                <td>${displaySize}</td>
+                <td style="color: #4caf50;">${t.seeds}</td>
                 <td>
                     <button class="download-btn" onclick="startDownload('${t.id}')">
                         <i class="fas fa-download"></i> Download
@@ -178,19 +202,17 @@ function renderPage() {
                 </td>
             </tr>
         `;
-        table.innerHTML += row;
+        tbody.innerHTML += row;
     });
 
-    if (end < filteredResults.length) {
-        loadMoreDiv.style.display = "block";
-    } else {
-        loadMoreDiv.style.display = "none";
-    }
+    loadMoreDiv.style.display = (end < filteredResults.length) ? "block" : "none";
 }
-// --- DOWNLOAD MANAGER LOGIC ---
+
+// ---------------------------------------------------------
+// DOWNLOAD MANAGER LOGIC
+// ---------------------------------------------------------
 
 function startDownload(id) {
-    // Find item in the filtered list using the ID
     const torrent = filteredResults.find(t => t.id === id);
     if (!torrent) return;
     
@@ -247,7 +269,6 @@ function pause(id) {
 
     window.api.pauseDownload(torrent.magnet);
 
-    // Update UI
     const btn = document.getElementById(`btn-pause-${id}`);
     btn.innerHTML = '<i class="fas fa-play"></i>';
     btn.setAttribute('onclick', `resume('${id}')`);
@@ -258,7 +279,6 @@ function pause(id) {
 
 function resume(id) {
     const torrent = activeDownloads.get(id);
-    // Reuse the magnet we saved earlier
     if(!torrent || !torrent.magnet) return; 
 
     window.api.resumeDownload(torrent);
@@ -276,8 +296,6 @@ function cancel(id) {
 
     if(torrent.magnet) {
         window.api.cancelDownload(torrent.magnet);
-    } else {
-        console.log("Canceling before magnet fetch...");
     }
 
     // Remove from UI
@@ -294,8 +312,10 @@ function cancel(id) {
 function updateBadge() {
     const count = activeDownloads.size;
     const badge = document.getElementById('activeCount');
-    badge.innerText = count;
-    badge.style.display = count > 0 ? 'flex' : 'none';
+    if(badge) {
+        badge.innerText = count;
+        badge.style.display = count > 0 ? 'flex' : 'none';
+    }
 }
 
 // --- LISTENERS ---
@@ -309,13 +329,12 @@ window.api.onProgress((data) => {
         const bar = document.getElementById(`bar-${data.id}`);
         const percentText = document.getElementById(`percent-${data.id}`);
         const speedText = document.getElementById(`speed-${data.id}`);
-        const sizeText = document.getElementById(`size-${data.id}`); // Get the new element
+        const sizeText = document.getElementById(`size-${data.id}`); 
 
         if(bar) bar.style.width = `${data.progress}%`;
         if(percentText) percentText.innerText = `${data.progress}%`;
         if(speedText) speedText.innerText = `${data.speed} MB/s`;
 
-        // NEW: Update Size Text (e.g. "450 MB / 1.2 GB")
         if (sizeText && data.total) {
             const downStr = formatBytes(data.downloaded);
             const totalStr = formatBytes(data.total);
@@ -325,9 +344,6 @@ window.api.onProgress((data) => {
 });
 
 window.api.onComplete((data) => {
-    // data = { id, title, path }
-    
-    // 1. Store the path in our activeDownloads map
     const torrent = activeDownloads.get(data.id);
     if (torrent) {
         torrent.filePath = data.path;
@@ -336,7 +352,7 @@ window.api.onComplete((data) => {
     const card = document.getElementById(`card-${data.id}`);
     if (!card) return;
 
-    // 2. Update Progress Bar to Green "100%"
+    // Green "100%"
     const bar = document.getElementById(`bar-${data.id}`);
     const percentText = document.getElementById(`percent-${data.id}`);
     const speedText = document.getElementById(`speed-${data.id}`);
@@ -350,7 +366,7 @@ window.api.onComplete((data) => {
         speedText.innerHTML = '<span style="color:#4caf50; font-weight:bold;">✅ Download Completed</span>';
     }
 
-    // 3. SWAP BUTTONS: Remove Pause/Cancel -> Add Locate
+    // Swap Buttons for "Locate"
     const actionDiv = card.querySelector('.card-actions');
     actionDiv.innerHTML = `
         <button class="action-icon-btn" onclick="locateFile('${data.id}')" title="Open File Location" style="background:#4caf50; width:100%; border-radius:4px;">
@@ -358,11 +374,9 @@ window.api.onComplete((data) => {
         </button>
     `;
 
-    // Notification
     new Notification('Download Finished', { body: data.title });
 });
 
-// --- NEW FUNCTION: LOCATE FILE ---
 function locateFile(id) {
     const torrent = activeDownloads.get(id);
     if (torrent && torrent.filePath) {
@@ -372,18 +386,14 @@ function locateFile(id) {
     }
 }
 
-// --- NEW LISTENER: CAPTURE MAGNET IMMEDIATELY ---
 window.api.onStarted((data) => {
-    // data = { id, magnet }
     const torrent = activeDownloads.get(data.id);
     if (torrent) {
-        console.log(`🔗 Magnet received for ${data.id}`);
-        torrent.magnet = data.magnet; // Save it!
+        torrent.magnet = data.magnet;
         updateCardButtons(data.id, data.magnet);
     }
 });
 
-// Helper to refresh buttons with the correct magnet
 function updateCardButtons(id, magnet) {
     const pauseBtn = document.getElementById(`btn-pause-${id}`);
     if (pauseBtn) {
@@ -391,13 +401,9 @@ function updateCardButtons(id, magnet) {
     }
 }
 
-// --- NEW: ERROR HANDLING ---
 window.api.onError((data) => {
-    // data = { id, message }
     const card = document.getElementById(`card-${data.id}`);
-    
     if (card) {
-        // Change progress text to red error message
         const progressText = document.getElementById(`speed-${data.id}`);
         if(progressText) {
             progressText.innerHTML = `<span style="color:#ff4444">⚠️ ${data.message}</span>`;
@@ -405,25 +411,17 @@ window.api.onError((data) => {
     }
 });
 
-// --- NEW: CLICK OUTSIDE TO CLOSE SIDEBAR ---
+// CLICK OUTSIDE TO CLOSE SIDEBAR
 document.addEventListener('click', (event) => {
     const sidebar = document.getElementById('downloadSidebar');
     const toggleBtn = document.querySelector('.toggle-downloads-btn');
-    
-    // Check if we clicked on a "Download" button in the table (to prevent immediate closing)
     const isDownloadBtn = event.target.closest('.download-btn');
 
-    // Logic:
-    // 1. Sidebar must be OPEN
-    // 2. Click must NOT be inside the Sidebar
-    // 3. Click must NOT be on the "Downloads" toggle button at the top
-    // 4. Click must NOT be on a "Download" button in the table
     if (sidebar.classList.contains('open') && 
         !sidebar.contains(event.target) && 
         !toggleBtn.contains(event.target) &&
         !isDownloadBtn) {
         
-        // Close it
         sidebar.classList.remove('open');
     }
 });

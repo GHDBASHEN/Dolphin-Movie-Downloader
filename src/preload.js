@@ -18,5 +18,6 @@ contextBridge.exposeInMainWorld('api', {
   onProgress: (callback) => ipcRenderer.on('download-progress', (event, data) => callback(data)),
   onComplete: (callback) => ipcRenderer.on('download-complete', (event, data) => callback(data)),
   onError: (callback) => ipcRenderer.on('download-error', (event, data) => callback(data)),
-  onUpdateMessage: (callback) => ipcRenderer.on('update-message', (event, msg) => callback(msg))
+  onUpdateMessage: (callback) => ipcRenderer.on('update-message', (event, msg) => callback(msg)),
+  onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, text) => callback(text))
 });

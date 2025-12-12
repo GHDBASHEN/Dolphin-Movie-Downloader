@@ -1,139 +1,343 @@
+/* =========================================
+   1. VARIABLES & RESET
+   ========================================= */
+:root {
+    --primary-red: #e50914;       /* Netflix/Bold Red */
+    --primary-hover: #b20710;     /* Darker Red for hover */
+    --bg-dark: #121212;           /* Deep Black Background */
+    --bg-card: #1f1f1f;           /* Card/Sidebar Background */
+    --bg-input: #2c2c2c;          /* Input Field Background */
+    --text-main: #ffffff;
+    --text-muted: #aaaaaa;
+    --border-color: #333333;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+* {
+    box-sizing: border-box;
+    outline: none;
+}
+
 body {
-    font-family: 'Segoe UI', sans-serif;
-    background-color: #121212;
-    color: white;
-    padding: 20px;
-}
-.container { max-width: 900px; margin: 0 auto; }
-.search-box { display: flex; gap: 10px; margin-bottom: 20px; }
-input { flex: 1; padding: 10px; border-radius: 5px; border: none; font-size: 16px; }
-button { padding: 10px 20px; background: #e50914; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; }
-button:hover { background: #b20710; }
-
-table { width: 100%; border-collapse: collapse; background: #1f1f1f; }
-th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
-th { background-color: #2c2c2c; }
-tr:hover { background-color: #2a2a2a; }
-
-.download-btn { background: #007bff; padding: 5px 15px; font-size: 14px; }
-.progress-bar { color: #4caf50; font-weight: bold; }
-.folder-btn { margin-top: 20px; background: #333; width: 100%; }
-
-.cancel-btn {
-    padding: 10px 20px;
-    background: #555; /* Gray initially */
-    color: white;
-    border: 1px solid #777;
-    cursor: pointer;
-    border-radius: 5px;
-    font-weight: bold;
-    font-size: 16px;
-}
-
-.cancel-btn:hover {
-    background: #dc3545; /* Red on hover */
-    border-color: #dc3545;
-}
-
-.settings-bar {
-    background: #1f1f1f;
-    padding: 10px;
-    border-radius: 8px;
-    margin-bottom: 20px;
+    margin: 0;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    height: 100vh;
     display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 14px;
+    flex-direction: column;
+    overflow: hidden; /* Prevents whole-page scroll, we scroll internal divs instead */
 }
 
-#pathDisplay {
-    flex: 1;
-    background: #2c2c2c;
-    border: 1px solid #444;
-    color: #bbb;
-    padding: 5px 10px;
-    border-radius: 4px;
+/* =========================================
+   2. MAIN LAYOUT & HEADER
+   ========================================= */
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
-
-.small-btn {
-    padding: 5px 10px;
-    background: #444;
-    font-size: 12px;
-}
-
-.primary-btn {
-    padding: 10px 20px;
-    background: #e50914;
-    font-size: 16px;
-}
-
 
 .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
 }
 
-/* TOGGLE BUTTON */
-.toggle-downloads-btn {
-    background: #333;
-    color: white;
-    border: 1px solid #555;
-    padding: 10px 15px;
-    border-radius: 20px;
-    cursor: pointer;
-    position: relative;
+h1 {
+    font-size: 28px;
+    margin: 0;
+    font-weight: 700;
+    /* Optional: Red Gradient Text */
+    background: linear-gradient(90deg, #fff 0%, var(--primary-red) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
-.badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #e50914;
+
+/* =========================================
+   3. SEARCH BOX
+   ========================================= */
+.search-box {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    background: var(--bg-card);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow);
+}
+
+input[type="text"] {
+    flex: 1;
+    background: transparent;
+    border: none;
     color: white;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    font-size: 12px;
+    font-size: 16px;
+    padding: 8px;
+}
+
+input::placeholder {
+    color: #666;
+}
+
+/* =========================================
+   4. BUTTONS
+   ========================================= */
+button {
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    border-radius: 5px;
+    font-weight: 600;
+}
+
+.primary-btn {
+    background-color: var(--primary-red);
+    color: white;
+    padding: 10px 25px;
+    font-size: 15px;
+}
+.primary-btn:hover { background-color: var(--primary-hover); }
+
+.secondary-btn {
+    background-color: #333;
+    color: #ddd;
+    padding: 10px 20px;
+    width: 100%; /* For Load More button */
+    margin-top: 15px;
+}
+.secondary-btn:hover { background-color: #444; }
+
+.cancel-btn {
+    background-color: #333;
+    color: #ddd;
+    padding: 10px 15px;
+}
+.cancel-btn:hover { background-color: #444; }
+
+.icon-btn {
+    background: #444;
+    color: white;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 4px;
+}
+.icon-btn:hover { background: #666; }
+
+/* Toggle Downloads Button */
+.toggle-downloads-btn {
+    background: var(--bg-card);
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 20px;
+    position: relative;
+}
+.toggle-downloads-btn:hover {
+    color: white;
+    border-color: #555;
 }
 
-/* SIDEBAR */
+.badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--primary-red);
+    color: white;
+    font-size: 11px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+/* =========================================
+   5. FILTERS BAR
+   ========================================= */
+.filter-bar {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 20px;
+    background: var(--bg-card); /* Optional: Background for filter bar */
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-group label {
+    font-size: 13px;
+    color: #888;
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+select {
+    background: var(--bg-input);
+    color: white;
+    border: 1px solid #444;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.filter-stats {
+    margin-left: auto;
+    font-size: 13px;
+    color: #666;
+}
+
+/* =========================================
+   6. RESULTS TABLE (HIDDEN BY DEFAULT)
+   ========================================= */
+.results-container {
+    /* Hidden by default, BUT when shown, it must be FLEX to handle scrolling */
+    display: none; 
+    flex: 1;
+    flex-direction: column; /* Stacks table and button vertically */
+    overflow-y: auto;       /* Enables the scrollbar */
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-card);
+    /* DELETE 'display: none' FROM HERE! 
+       We are hiding the .results-container now, so the table doesn't need to hide itself. */
+}
+
+th, td {
+    padding: 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+th {
+    background-color: #252525;
+    color: #999;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky; /* Keeps header fixed when scrolling */
+    top: 0;
+}
+
+td {
+    font-size: 14px;
+    color: #eee;
+}
+
+tr:hover {
+    background-color: #2a2a2a;
+}
+
+/* Specific Column Tweaks */
+td:first-child { font-weight: 500; color: white; } /* Title */
+td:nth-child(3) { color: #4caf50; } /* Seeds (Green) */
+
+.download-btn {
+    background: #007bff; /* Blue for download action */
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 4px;
+    color: white;
+}
+.download-btn:hover { background: #0056b3; }
+
+.load-more-container {
+    text-align: center;
+    padding: 20px;
+    background: var(--bg-card);
+}
+
+/* =========================================
+   7. SIDEBAR (DOWNLOADS)
+   ========================================= */
 .sidebar {
     position: fixed;
     top: 0;
-    right: -400px; /* Hidden by default */
+    right: -400px; /* Hidden off-screen */
     width: 350px;
     height: 100vh;
-    background: #1f1f1f;
-    box-shadow: -5px 0 15px rgba(0,0,0,0.5);
-    transition: right 0.3s ease;
-    z-index: 1000;
+    background: #181818; /* Slightly different dark */
+    box-shadow: -5px 0 20px rgba(0,0,0,0.8);
+    transition: right 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    z-index: 2000;
     display: flex;
     flex-direction: column;
+    border-left: 1px solid #333;
 }
 
 .sidebar.open {
-    right: 0; /* Slide in */
+    right: 0; /* Slide In */
 }
 
 .sidebar-header {
     padding: 20px;
+    background: #202020;
     border-bottom: 1px solid #333;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #252525;
 }
+
+.sidebar-header h2 { margin: 0; font-size: 18px; }
 
 .close-btn {
     background: none;
-    border: none;
-    color: #fff;
+    color: #888;
     font-size: 24px;
-    cursor: pointer;
+    padding: 0;
+}
+.close-btn:hover { color: white; }
+
+.sidebar-settings {
+    padding: 15px;
+    background: #202020;
+    border-bottom: 1px solid #333;
+}
+
+.path-input-group {
+    display: flex;
+    gap: 8px;
+    margin-top: 5px;
+}
+
+#pathDisplay {
+    flex: 1;
+    background: #121212;
+    border: 1px solid #333;
+    color: #aaa;
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .download-list {
@@ -142,188 +346,119 @@ tr:hover { background-color: #2a2a2a; }
     padding: 15px;
 }
 
-/* DOWNLOAD CARD */
+.empty-state {
+    text-align: center;
+    margin-top: 60px;
+    color: #555;
+    font-size: 14px;
+}
+
+/* =========================================
+   8. DOWNLOAD CARDS (Inside Sidebar)
+   ========================================= */
 .download-card {
-    background: #2c2c2c;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-    border: 1px solid #444;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
 }
 
 .card-title {
-    font-size: 14px;
-    font-weight: bold;
-    margin-bottom: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: #ddd;
 }
 
 .progress-info {
     display: flex;
     justify-content: space-between;
-    align-items: center; /* Aligns text vertically */
-    font-size: 12px;
-    color: #aaa;
-    margin-bottom: 5px;
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 4px;
 }
 
 .progress-bar-bg {
     width: 100%;
-    height: 6px;
+    height: 4px;
     background: #444;
-    border-radius: 3px;
+    border-radius: 2px;
     margin-bottom: 10px;
     overflow: hidden;
 }
 
 .progress-bar-fill {
     height: 100%;
-    background: #e50914;
+    background: var(--primary-red);
     width: 0%;
-    transition: width 0.5s ease;
+    transition: width 0.3s ease;
 }
 
 .card-actions {
     display: flex;
-    gap: 10px;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
 .action-icon-btn {
-    background: #444;
-    border: none;
-    color: white;
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
-    cursor: pointer;
+    background: #333;
+    color: #bbb;
     display: flex;
     align-items: center;
     justify-content: center;
-}
-.action-icon-btn:hover { background: #666; }
-.btn-cancel { background: #dc3545; }
-.btn-cancel:hover { background: #a71d2a; }
-
-.empty-state {
-    text-align: center;
-    color: #666;
-    margin-top: 50px;
-}
-
-.sidebar-settings {
-    padding: 15px;
-    background: #252525;
-    border-bottom: 1px solid #333;
-    font-size: 13px;
-    color: #aaa;
-}
-
-.sidebar-settings label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: bold;
-    color: #fff;
-}
-
-.path-input-group {
-    display: flex;
-    gap: 5px;
-}
-
-.path-input-group input {
-    flex: 1;
-    background: #1f1f1f;
-    border: 1px solid #444;
-    color: #ddd;
-    padding: 6px;
-    border-radius: 4px;
     font-size: 12px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+}
+.action-icon-btn:hover { background: #555; color: white; }
+
+.btn-cancel:hover { background: #b20710; } /* Red for cancel */
+
+/* =========================================
+   9. SCROLLBARS
+   ========================================= */
+::-webkit-scrollbar {
+    width: 8px;
 }
 
-.icon-btn {
-    background: #444;
-    border: none;
-    color: white;
-    width: 30px;
-    height: 30px; /* Match input height */
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
     border-radius: 4px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
-.icon-btn:hover {
-    background: #666;
-}
-
-/* Adjust list to account for settings height */
-.download-list {
-    background: #1f1f1f;
-}
-
-.load-more-container {
-    text-align: center;
-    padding: 20px;
-    background: #1f1f1f; /* Match table background */
-    border-top: 1px solid #333;
-}
-
-.secondary-btn {
-    background: #444;
-    color: white;
-    padding: 10px 30px;
-    border: 1px solid #666;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-}
-
-.secondary-btn:hover {
+::-webkit-scrollbar-thumb:hover {
     background: #555;
 }
 
-
-.filter-bar {
+#emptyState {
+    /* Centers the content in the available space */
+    flex: 1;
     display: flex;
-    gap: 20px;
-    background: #252525;
-    padding: 10px 15px;
-    border-radius: 4px;
-    margin-bottom: 20px;
+    flex-direction: column;
+    justify-content: center;
     align-items: center;
-    border: 1px solid #333;
+    color: #444; /* Darker grey for better visibility */
+    margin-top: 20px;
+    min-height: 300px; /* Gives it some height so it doesn't look squashed */
 }
 
-.filter-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    color: #ccc;
+#emptyState i {
+    color: var(--primary-red); /* Uses your theme red */
+    opacity: 0.5;
+    animation: pulse 3s infinite;
 }
 
-.filter-group select {
-    background: #1f1f1f;
-    color: white;
-    border: 1px solid #444;
-    padding: 5px 10px;
-    border-radius: 4px;
-    outline: none;
-    cursor: pointer;
-}
-
-.filter-group select:hover {
-    border-color: #666;
-}
-
-.filter-stats {
-    margin-left: auto; /* Pushes to right side */
-    font-size: 12px;
-    color: #888;
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 0.5; }
 }
