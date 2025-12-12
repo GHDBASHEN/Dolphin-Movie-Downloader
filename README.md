@@ -11,7 +11,8 @@ Designed with a clean, Netflix-inspired dark interface, the application eliminat
 
 ---
 
-<img width="1074" height="874" alt="Screenshot 2025-12-11 235811" src="https://github.com/user-attachments/assets/a4697039-c298-4d64-acc8-f79ac632d4cb" />
+<img width="1044" height="870" alt="{E7007848-3F3B-4257-8A43-87E0BFC861E9}" src="https://github.com/user-attachments/assets/a1a2dfff-887b-4f89-ae6e-c016c4e152ff" />
+
 
 ## ✨ Key Features
 
