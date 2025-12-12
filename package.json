@@ -1,6 +1,6 @@
 {
   "name": "dolphin-movie-downloader",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "repository": "https://github.com/GHDBASHEN/Dolphin-Movie-Downloader",
   "description": "Free Desktop Movie Downloader",
   "main": "src/main.js",
@@ -33,9 +33,20 @@
       "category": "Video"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
       "icon": "icon.icns",
-      "category": "public.app-category.entertainment"
+      "category": "public.app-category.entertainment",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
     },
     "dmg": {
       "icon": "icon.icns"
