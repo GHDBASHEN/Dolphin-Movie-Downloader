@@ -16,8 +16,13 @@
         </div>
 
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Search movies...">
-            <button onclick="search()" class="primary-btn">Search</button>
+            <input type="text" id="searchInput" placeholder="Search movies..." onkeypress="handleEnter(event)">
+            
+            <button id="searchBtn" onclick="search()" class="primary-btn">Search</button>
+            
+            <button id="cancelSearchBtn" onclick="cancelSearch()" class="cancel-btn" style="display:none">
+                <i class="fas fa-times"></i> Cancel
+            </button>
         </div>
 
         <div class="filter-bar">

@@ -1,5 +1,5 @@
 let activeDownloads = new Map();
-
+let currentSearchTimestamp = 0;
 // DATA STORAGE
 let allSearchResults = []; // Raw list from backend (100 items)
 let filteredResults = [];  // List after filters applied (e.g. 20 items)
@@ -11,6 +11,10 @@ window.onload = async () => {
     const config = await window.api.getConfig();
     document.getElementById('pathDisplay').value = config.downloadPath;
 };
+
+function handleEnter(e) {
+    if (e.key === 'Enter') search();
+}
 
 // Helper: Convert bytes to readable size (MB, GB)
 function formatBytes(bytes) {
@@ -31,15 +35,23 @@ async function changeFolder() {
 
 async function search() {
     const query = document.getElementById('searchInput').value;
-    const btn = document.querySelector('.primary-btn');
+    const searchBtn = document.getElementById('searchBtn');
+    const cancelBtn = document.getElementById('cancelSearchBtn');
     const table = document.getElementById('resultsBody');
     const loadMoreDiv = document.getElementById('loadMoreContainer');
     
     if(!query) return;
 
-    // Reset UI
-    btn.innerText = "Searching...";
+    // 1. GENERATE ID for this specific search
+    const mySearchId = Date.now();
+    currentSearchTimestamp = mySearchId;
+
+    // 2. UPDATE UI: Show Cancel, Hide Search
+    searchBtn.style.display = 'none';
+    cancelBtn.style.display = 'inline-block'; // Show Cancel
+    
     table.innerHTML = ""; 
+    document.getElementById('resultCount').innerText = "Searching...";
     loadMoreDiv.style.display = "none";
     
     // Reset Data
@@ -47,20 +59,52 @@ async function search() {
     allSearchResults = [];
     filteredResults = [];
 
-    // Fetch from Backend
-    const results = await window.api.searchMovies(query);
-    allSearchResults = results;
-    
-    btn.innerText = "Search";
+    try {
+        // 3. CALL BACKEND (This takes time)
+        const results = await window.api.searchMovies(query);
+        
+        // 4. CHECK: Is this still the active search?
+        // If user clicked "Cancel" or started a NEW search, this ID won't match.
+        if (currentSearchTimestamp !== mySearchId) {
+            console.log("Old search result ignored.");
+            return; 
+        }
 
-    if (results.length === 0) {
-        table.innerHTML = "<tr><td colspan='4'>No results found (Check VPN).</td></tr>";
-        document.getElementById('resultCount').innerText = "0 results";
-        return;
+        allSearchResults = results;
+
+        if (results.length === 0) {
+            table.innerHTML = "<tr><td colspan='4'>No results found (Check VPN).</td></tr>";
+            document.getElementById('resultCount').innerText = "0 results";
+        } else {
+            // Apply filters and render
+            applyFilters();
+        }
+
+    } catch (err) {
+        if (currentSearchTimestamp === mySearchId) {
+            table.innerHTML = "<tr><td colspan='4'>Error occurred during search.</td></tr>";
+        }
+    } finally {
+        // 5. RESET UI (Only if this is still the active search)
+        if (currentSearchTimestamp === mySearchId) {
+            searchBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'none';
+        }
     }
+}
 
-    // Instead of rendering directly, we apply filters first
-    applyFilters();
+function cancelSearch() {
+    // 1. Invalidate the current search
+    currentSearchTimestamp = 0;
+
+    // 2. Reset UI immediately
+    document.getElementById('searchBtn').style.display = 'inline-block';
+    document.getElementById('cancelSearchBtn').style.display = 'none';
+    
+    // 3. Show message
+    const table = document.getElementById('resultsBody');
+    table.innerHTML = "<tr><td colspan='4' style='color:#ffc107'>⚠️ Search Cancelled by user.</td></tr>";
+    document.getElementById('resultCount').innerText = "";
 }
 
 function applyFilters() {
