@@ -77,6 +77,3 @@ The developer does **not** encourage or support the downloading of copyrighted c
 Users are responsible for complying with local laws.  
 If torrenting is restricted in your region, you should use a VPN.
 
----
-
-## 📌 Short Description (package.json)
