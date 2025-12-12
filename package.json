@@ -1,6 +1,6 @@
 {
   "name": "dolphin-movie-downloader",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "repository": "https://github.com/GHDBASHEN/Dolphin-Movie-Downloader",
   "description": "Free Desktop Movie Downloader",
   "main": "src/main.js",

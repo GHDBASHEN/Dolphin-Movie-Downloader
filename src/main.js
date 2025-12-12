@@ -3,6 +3,7 @@ const path = require('path');
 const WebTorrent = require('webtorrent');
 const TorrentSearchApi = require('torrent-search-api');
 const fs = require('fs');
+const { autoUpdater } = require('electron-updater');
 
 // --- CONFIGURATION ---
 TorrentSearchApi.enablePublicProviders(); // Fix for "No Results"
@@ -200,4 +201,37 @@ ipcMain.on('cancel-download', (event, magnet) => {
 
 ipcMain.on('show-in-folder', (event, filePath) => {
     shell.showItemInFolder(filePath);
+});
+
+app.whenReady().then(() => {
+  createWindow();
+  
+  // CHECK FOR UPDATES IMMEDIATELY
+  autoUpdater.checkForUpdatesAndNotify();
+});
+
+// --- AUTO UPDATE EVENTS ---
+
+// 1. Update Found
+autoUpdater.on('update-available', () => {
+  console.log('Update available.');
+  // Optional: Send message to UI to show a "Downloading..." spinner
+  mainWindow.webContents.send('update-message', 'New version available. Downloading...');
+});
+
+// 2. Update Downloaded
+autoUpdater.on('update-downloaded', () => {
+  console.log('Update downloaded.');
+  
+  // Ask User to Restart
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Update Ready',
+    message: 'A new version has been downloaded. Restart now to install?',
+    buttons: ['Restart', 'Later']
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
 });
