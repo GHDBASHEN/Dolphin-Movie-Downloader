@@ -274,8 +274,52 @@ window.api.onProgress((data) => {
 });
 
 window.api.onComplete((data) => {
-    new Notification('Download Complete', { body: data.title });
+    // data = { id, title, path }
+    
+    // 1. Store the path in our activeDownloads map
+    const torrent = activeDownloads.get(data.id);
+    if (torrent) {
+        torrent.filePath = data.path;
+    }
+
+    const card = document.getElementById(`card-${data.id}`);
+    if (!card) return;
+
+    // 2. Update Progress Bar to Green "100%"
+    const bar = document.getElementById(`bar-${data.id}`);
+    const percentText = document.getElementById(`percent-${data.id}`);
+    const speedText = document.getElementById(`speed-${data.id}`);
+
+    if (bar) {
+        bar.style.width = '100%';
+        bar.style.backgroundColor = '#4caf50'; // Green
+    }
+    if (percentText) percentText.innerText = "100%";
+    if (speedText) {
+        speedText.innerHTML = '<span style="color:#4caf50; font-weight:bold;">✅ Download Completed</span>';
+    }
+
+    // 3. SWAP BUTTONS: Remove Pause/Cancel -> Add Locate
+    const actionDiv = card.querySelector('.card-actions');
+    actionDiv.innerHTML = `
+        <button class="action-icon-btn" onclick="locateFile('${data.id}')" title="Open File Location" style="background:#4caf50; width:100%; border-radius:4px;">
+            <i class="fas fa-folder-open"></i>&nbsp; Locate File
+        </button>
+    `;
+
+    // Notification
+    new Notification('Download Finished', { body: data.title });
 });
+
+// --- NEW FUNCTION: LOCATE FILE ---
+function locateFile(id) {
+    const torrent = activeDownloads.get(id);
+    if (torrent && torrent.filePath) {
+        window.api.showItemInFolder(torrent.filePath);
+    } else {
+        alert("File path not found. It might have been moved.");
+    }
+}
 
 // --- NEW LISTENER: CAPTURE MAGNET IMMEDIATELY ---
 window.api.onStarted((data) => {

@@ -1,25 +1,45 @@
 {
-  "name": "movie-downloader-desktop",
+  "name": "dolphin-movie-downloader",
   "version": "1.0.0",
+  "repository": "https://github.com/GHDBASHEN/Dolphin-Movie-Downloader",
+  "description": "Free Desktop Movie Downloader",
   "main": "src/main.js",
+  "author": "Ghdb Ashen",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/GHDBASHEN/Popcorn-Time-Desktop-Movie-Downloader.git"
+  "build": {
+    "appId": "com.moviedownloader.app",
+     "publish": [
+      {
+        "provider": "github",
+        "owner": "GHDBASHEN",
+        "repo": "Dolphin-Movie-Downloader"
+      }
+    ],
+    "productName": "Dolphin Movie Downloader",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "publish": [ "github" ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/GHDBASHEN/Popcorn-Time-Desktop-Movie-Downloader/issues"
-  },
-  "homepage": "https://github.com/GHDBASHEN/Popcorn-Time-Desktop-Movie-Downloader#readme",
   "dependencies": {
-    "electron": "^39.2.6",
+    "electron-updater": "^6.6.2",
     "torrent-search-api": "^2.1.4",
-    "webtorrent": "^1.9.7"
+    "webtorrent": "1.9.7"
+  },
+  "devDependencies": {
+    "electron": "^39.2.6",
+    "electron-builder": "^24.13.3"
   }
 }

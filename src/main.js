@@ -90,6 +90,7 @@ ipcMain.on('resume-download', (event, torrentData) => {
 });
 
 // --- CORE FUNCTION: THE DOWNLOADER ---
+// --- CORE FUNCTION: THE DOWNLOADER ---
 async function startTorrent(event, torrentData) {
   const config = loadConfig();
   
@@ -99,15 +100,12 @@ async function startTorrent(event, torrentData) {
       try {
           console.log(`🧲 Fetching magnet for: ${torrentData.title}`);
           magnet = await TorrentSearchApi.getMagnet(torrentData);
-          
-          if (!magnet) throw new Error("Magnet link not found (Source might be blocked).");
-
+          if (!magnet) throw new Error("Magnet link not found.");
       } catch (e) {
           console.error("Failed to fetch magnet:", e);
-          // NEW: Send error back to UI
           mainWindow.webContents.send('download-error', { 
               id: torrentData.id, 
-              message: "Failed to get Magnet Link. Try a VPN." 
+              message: "Failed to get Magnet Link." 
           });
           return;
       }
@@ -130,7 +128,6 @@ async function startTorrent(event, torrentData) {
         magnet: magnet
     });
     
-    // Progress Loop
     const interval = setInterval(() => {
         if (!mainWindow || torrent.destroyed) return clearInterval(interval);
         
@@ -145,20 +142,35 @@ async function startTorrent(event, torrentData) {
         if (torrent.progress === 1) clearInterval(interval);
     }, 1000);
 
+    // --- UPDATED: HANDLE COMPLETION ---
     torrent.on('done', () => {
-      mainWindow.webContents.send('download-complete', { title: torrentData.title });
+      // Find the video file again to get the correct path
+      const file = torrent.files.find(f => f.name.endsWith('.mp4') || f.name.endsWith('.mkv') || f.name.endsWith('.avi'));
+      
+      let fullPath = "";
+      if (file) {
+          // Construct full path for Windows/Mac
+          fullPath = path.join(finalPath, file.path);
+      }
+
+      console.log(`🎉 Done: ${fullPath}`);
+
+      // Send ID and PATH so UI can show "Locate" button
+      mainWindow.webContents.send('download-complete', { 
+          id: torrentData.id,
+          title: torrentData.title,
+          path: fullPath 
+      });
     });
     
-    // NEW: Handle Download Errors (e.g. No Peers)
     torrent.on('error', (err) => {
         mainWindow.webContents.send('download-error', { 
             id: torrentData.id, 
-            message: "Download Error: " + err.message 
+            message: "Error: " + err.message 
         });
     });
   });
 }
-
 // --- HANDLER 5: PAUSE ---
 ipcMain.on('pause-download', (event, magnet) => {
     if (!magnet) return console.error("❌ Pause failed: No magnet link provided.");
@@ -184,4 +196,8 @@ ipcMain.on('cancel-download', (event, magnet) => {
             if (!err) console.log("🗑️ File deleted.");
         });
     }
+});
+
+ipcMain.on('show-in-folder', (event, filePath) => {
+    shell.showItemInFolder(filePath);
 });
