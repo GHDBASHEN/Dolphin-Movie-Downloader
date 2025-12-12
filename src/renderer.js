@@ -360,3 +360,26 @@ window.api.onError((data) => {
         }
     }
 });
+
+// --- NEW: CLICK OUTSIDE TO CLOSE SIDEBAR ---
+document.addEventListener('click', (event) => {
+    const sidebar = document.getElementById('downloadSidebar');
+    const toggleBtn = document.querySelector('.toggle-downloads-btn');
+    
+    // Check if we clicked on a "Download" button in the table (to prevent immediate closing)
+    const isDownloadBtn = event.target.closest('.download-btn');
+
+    // Logic:
+    // 1. Sidebar must be OPEN
+    // 2. Click must NOT be inside the Sidebar
+    // 3. Click must NOT be on the "Downloads" toggle button at the top
+    // 4. Click must NOT be on a "Download" button in the table
+    if (sidebar.classList.contains('open') && 
+        !sidebar.contains(event.target) && 
+        !toggleBtn.contains(event.target) &&
+        !isDownloadBtn) {
+        
+        // Close it
+        sidebar.classList.remove('open');
+    }
+});
