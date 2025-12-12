@@ -1,15 +1,37 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const WebTorrent = require('webtorrent');
 const TorrentSearchApi = require('torrent-search-api');
 const fs = require('fs');
-const { autoUpdater } = require('electron-updater');
 
 // --- CONFIGURATION ---
-TorrentSearchApi.enablePublicProviders(); // Fix for "No Results"
+TorrentSearchApi.enablePublicProviders();
 const client = new WebTorrent();
 let mainWindow;
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+
+// ---------------------------------------------------------
+// SINGLE INSTANCE LOCK (Prevents multiple windows)
+// ---------------------------------------------------------
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(() => {
+      createWindow();
+      // Check for updates after window loads
+      autoUpdater.checkForUpdatesAndNotify();
+  });
+}
 
 // --- HELPER: LOAD/SAVE CONFIG ---
 function loadConfig() {
@@ -36,10 +58,10 @@ function createWindow() {
       contextIsolation: true
     }
   });
+  
+  mainWindow.setMenuBarVisibility(false); // Optional: Hides top menu
   mainWindow.loadFile('src/index.html');
 }
-
-app.whenReady().then(createWindow);
 
 // --- HANDLER 1: SEARCH MOVIES ---
 ipcMain.handle('search-movies', async (event, query) => {
@@ -47,7 +69,7 @@ ipcMain.handle('search-movies', async (event, query) => {
     const activeProviders = TorrentSearchApi.getActiveProviders().map(p => p.name).join(', ');
     console.log(`🔎 Searching for: "${query}" via [${activeProviders}]`);
 
-    // FETCH 100 RESULTS (Enough for 5 pages of 20)
+    // Fetch 100 results for pagination
     const results = await TorrentSearchApi.search(query, 'All', 100);
     console.log(`✅ Found ${results.length} raw results`);
 
@@ -80,18 +102,36 @@ ipcMain.handle('get-config', () => {
 });
 
 // --- HANDLER 4: START & RESUME DOWNLOAD ---
-// We use the same helper function for both
-ipcMain.on('start-download', (event, torrentData) => {
-    startTorrent(event, torrentData);
+ipcMain.on('start-download', (event, torrentData) => { startTorrent(event, torrentData); });
+ipcMain.on('resume-download', (event, torrentData) => { startTorrent(event, torrentData); });
+
+// --- HANDLER 5: PAUSE ---
+ipcMain.on('pause-download', (event, magnet) => {
+    if (!magnet) return;
+    const torrent = client.get(magnet);
+    if (torrent) torrent.destroy();
 });
 
-ipcMain.on('resume-download', (event, torrentData) => {
-    console.log(`▶️ Resuming: ${torrentData.title}`);
-    startTorrent(event, torrentData);
+// --- HANDLER 6: CANCEL ---
+ipcMain.on('cancel-download', (event, magnet) => {
+    if (!magnet) return;
+    const torrent = client.get(magnet);
+    if (torrent) {
+        // Destroy and delete file
+        client.remove(magnet, { destroyStore: true }, (err) => {
+            if(!err) console.log("Deleted file");
+        });
+    }
 });
 
-// --- CORE FUNCTION: THE DOWNLOADER ---
-// --- CORE FUNCTION: THE DOWNLOADER ---
+// --- HANDLER 7: LOCATE FILE ---
+ipcMain.on('show-in-folder', (event, filePath) => {
+    shell.showItemInFolder(filePath);
+});
+
+// ---------------------------------------------------------
+// CORE DOWNLOAD FUNCTION
+// ---------------------------------------------------------
 async function startTorrent(event, torrentData) {
   const config = loadConfig();
   
@@ -106,29 +146,25 @@ async function startTorrent(event, torrentData) {
           console.error("Failed to fetch magnet:", e);
           mainWindow.webContents.send('download-error', { 
               id: torrentData.id, 
-              message: "Failed to get Magnet Link." 
+              message: "Failed to get Magnet. Check VPN." 
           });
           return;
       }
   }
 
-  const finalPath = config.downloadPath;
+  // 2. Check Duplicates
+  if (client.get(magnet)) return; 
 
-  // 2. Check duplicates
-  if (client.get(magnet)) {
-      console.log("⚠️ Torrent already active.");
-      return; 
-  }
-
-  // 3. Start Download
-  client.add(magnet, { path: finalPath }, (torrent) => {
-    console.log(`✅ Download started: ${torrentData.title}`);
-
+  // 3. Start
+  client.add(magnet, { path: config.downloadPath }, (torrent) => {
+    
+    // Send Magnet back to UI immediately
     mainWindow.webContents.send('download-started', {
         id: torrentData.id,
         magnet: magnet
     });
     
+    // Progress Loop
     const interval = setInterval(() => {
         if (!mainWindow || torrent.destroyed) return clearInterval(interval);
         
@@ -143,20 +179,15 @@ async function startTorrent(event, torrentData) {
         if (torrent.progress === 1) clearInterval(interval);
     }, 1000);
 
-    // --- UPDATED: HANDLE COMPLETION ---
+    // Completion
     torrent.on('done', () => {
-      // Find the video file again to get the correct path
       const file = torrent.files.find(f => f.name.endsWith('.mp4') || f.name.endsWith('.mkv') || f.name.endsWith('.avi'));
       
       let fullPath = "";
       if (file) {
-          // Construct full path for Windows/Mac
-          fullPath = path.join(finalPath, file.path);
+          fullPath = path.join(config.downloadPath, file.path);
       }
 
-      console.log(`🎉 Done: ${fullPath}`);
-
-      // Send ID and PATH so UI can show "Locate" button
       mainWindow.webContents.send('download-complete', { 
           id: torrentData.id,
           title: torrentData.title,
@@ -164,6 +195,7 @@ async function startTorrent(event, torrentData) {
       });
     });
     
+    // Errors
     torrent.on('error', (err) => {
         mainWindow.webContents.send('download-error', { 
             id: torrentData.id, 
@@ -172,58 +204,15 @@ async function startTorrent(event, torrentData) {
     });
   });
 }
-// --- HANDLER 5: PAUSE ---
-ipcMain.on('pause-download', (event, magnet) => {
-    if (!magnet) return console.error("❌ Pause failed: No magnet link provided.");
-    
-    const torrent = client.get(magnet);
-    if (torrent) {
-        console.log("⏸️ Pausing torrent...");
-        torrent.destroy(); // Stops connection, keeps files
-    } else {
-        console.log("⚠️ Torrent not found to pause.");
-    }
-});
 
-// --- HANDLER 6: CANCEL ---
-ipcMain.on('cancel-download', (event, magnet) => {
-    if (!magnet) return console.error("❌ Cancel failed: No magnet link provided.");
-
-    const torrent = client.get(magnet);
-    if (torrent) {
-        console.log("❌ Canceling torrent...");
-        // destroyStore: true -> Deletes the file from disk
-        client.remove(magnet, { destroyStore: true }, (err) => {
-            if (!err) console.log("🗑️ File deleted.");
-        });
-    }
-});
-
-ipcMain.on('show-in-folder', (event, filePath) => {
-    shell.showItemInFolder(filePath);
-});
-
-app.whenReady().then(() => {
-  createWindow();
-  
-  // CHECK FOR UPDATES IMMEDIATELY
-  autoUpdater.checkForUpdatesAndNotify();
-});
-
-// --- AUTO UPDATE EVENTS ---
-
-// 1. Update Found
+// ---------------------------------------------------------
+// AUTO UPDATER EVENTS
+// ---------------------------------------------------------
 autoUpdater.on('update-available', () => {
-  console.log('Update available.');
-  // Optional: Send message to UI to show a "Downloading..." spinner
   mainWindow.webContents.send('update-message', 'New version available. Downloading...');
 });
 
-// 2. Update Downloaded
 autoUpdater.on('update-downloaded', () => {
-  console.log('Update downloaded.');
-  
-  // Ask User to Restart
   dialog.showMessageBox(mainWindow, {
     type: 'info',
     title: 'Update Ready',
