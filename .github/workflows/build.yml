@@ -10,6 +10,8 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # If one platform fails, don't cancel the others. Let them finish!
+      fail-fast: false 
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
 
@@ -22,17 +24,20 @@ jobs:
         with:
           node-version: 18
 
-      # Linux Fix: Install graphics libraries needed for building
+      # --- LINUX SPECIFIC SETUP ---
       - name: Install Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libarchive-tools libicns-bin graphicsmagick xz-utils
+          # Fixed package names: libicns-utils, graphicsmagick, xz-utils
+          # libfuse2 is often needed for AppImage creation on Ubuntu 22+
+          sudo apt-get install -y libicns-utils graphicsmagick xz-utils libarchive-tools libfuse2
 
+      # --- COMMON STEPS ---
       - name: Install Project Dependencies
         run: npm install
 
       - name: Build and Publish
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub automatically provides this
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist -- -p always
