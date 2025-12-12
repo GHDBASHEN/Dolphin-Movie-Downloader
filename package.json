@@ -27,15 +27,23 @@
       "publish": [ "github" ],
       "icon": "icon.ico"
     },
+    "linux": {
+      "target": ["AppImage"], 
+      "icon": "icon.png",
+      "category": "Video"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "icon.icns",
+      "category": "public.app-category.entertainment"
+    },
+    "dmg": {
+      "icon": "icon.icns"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
-    },
-    "linux": {
-      "target": ["zip"],
-      "icon": "icon.png",
-      "category": "Video"
     }
   },
   "dependencies": {
