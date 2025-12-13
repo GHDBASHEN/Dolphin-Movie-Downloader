@@ -9,10 +9,13 @@ const fs = require('fs');
 TorrentSearchApi.enablePublicProviders();
 const client = new WebTorrent();
 let mainWindow;
+let splash;
+
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+const DOWNLOADS_DB = path.join(app.getPath('userData'), 'active_downloads.json');
 
 // ---------------------------------------------------------
-// SINGLE INSTANCE LOCK (Prevents multiple windows)
+// SINGLE INSTANCE LOCK
 // ---------------------------------------------------------
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -28,20 +31,65 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
       createWindow();
-      // Check for updates after window loads
-      autoUpdater.checkForUpdatesAndNotify();
+      if (app.isPackaged) autoUpdater.checkForUpdatesAndNotify();
   });
 }
 
+// ---------------------------------------------------------
+// SAVE & RESTORE LOGIC (AUTO-RESUME)
+// ---------------------------------------------------------
 
+// 1. SAVE: Runs before the app quits
+function saveState() {
+    // Convert active torrents to a simple JSON list
+    const active = client.torrents.map(t => ({
+        id: t.uiId,      // Custom ID we attached
+        title: t.uiTitle,
+        magnet: t.magnetURI,
+        path: t.path,
+        paused: false 
+    }));
+    
+    try {
+        fs.writeFileSync(DOWNLOADS_DB, JSON.stringify(active));
+        console.log("✅ Saved state:", active.length, "downloads.");
+    } catch (e) { console.error("Save failed:", e); }
+}
 
-// --- HELPER: LOAD/SAVE CONFIG ---
+// 2. RESTORE: Runs when app starts
+function restoreDownloads() {
+    if (!fs.existsSync(DOWNLOADS_DB)) return;
+
+    try {
+        const saved = JSON.parse(fs.readFileSync(DOWNLOADS_DB));
+        console.log("🔄 Restoring", saved.length, "downloads...");
+
+        saved.forEach(item => {
+            // Restart the torrent engine for each item
+            // We pass 'true' to indicate this is a RESTORE (not a new user click)
+            startTorrent(null, item, true); 
+        });
+
+        // Send the list to the UI so the Sidebar pops up
+        setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('restore-downloads', saved);
+            }
+        }, 2000); // Wait 2s for window to fully load
+
+    } catch (e) { console.error("Restore failed:", e); }
+}
+
+// Save when quitting
+app.on('before-quit', () => {
+    saveState();
+});
+
+// --- HELPER: CONFIG ---
 function loadConfig() {
     try {
-        if (fs.existsSync(CONFIG_PATH)) {
-            return JSON.parse(fs.readFileSync(CONFIG_PATH));
-        }
-    } catch (e) { console.error(e); }
+        if (fs.existsSync(CONFIG_PATH)) return JSON.parse(fs.readFileSync(CONFIG_PATH));
+    } catch (e) {}
     return { downloadPath: app.getPath('downloads') };
 }
 
@@ -53,189 +101,128 @@ function saveConfig(config) {
 function createWindow() {
   
   // 1. Create SPLASH Window
-  const splash = new BrowserWindow({
-    width: 500,
-    height: 350,
-    transparent: true, 
-    frame: false,
-    alwaysOnTop: true,
+  splash = new BrowserWindow({
+    width: 500, height: 350, transparent: true, frame: false, alwaysOnTop: true,
     icon: path.join(__dirname, '../icon.png'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true
-    }
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true }
   });
-  
   splash.loadFile('src/splash.html');
 
-  splash.webContents.once('did-finish-load', () => {
-      splash.webContents.send('app-version', app.getVersion());
-      });
-
-  // 2. Create MAIN Window (Hidden)
+  // 2. Create MAIN Window (Hidden initially)
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 800,
-    show: false, 
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true
-    }
+    width: 1000, height: 800, show: false,
+    icon: path.join(__dirname, '../icon.png'),
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true }
   });
   
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadFile('src/index.html');
 
-  // --- UPDATE CHECK LOGIC ---
+  // --- UPDATE / LAUNCH LOGIC ---
   
   const sendStatus = (text) => {
-      // Check if splash still exists before sending
       if (splash && !splash.isDestroyed()) {
         try { splash.webContents.send('update-status', text); } catch (e) {}
       }
   };
 
-  // Helper to safely switch windows
   const launchMainApp = () => {
       if (splash && !splash.isDestroyed()) {
           splash.destroy();
           mainWindow.show();
+          restoreDownloads(); // <--- RESTORE STARTS HERE
       }
   };
 
   splash.webContents.once('did-finish-load', () => {
-      
-      // FIX 1: SKIP UPDATES IF IN DEV MODE
-      // 'app.isPackaged' is true only in built production apps (.exe/.dmg)
+      splash.webContents.send('app-version', app.getVersion());
+
+      // FIX: Skip updates if in Dev Mode (npm start)
       if (!app.isPackaged) {
           sendStatus("Dev Mode: Launching...");
           setTimeout(launchMainApp, 1500); 
-          return; // Stop here, don't run the updater
+          return; 
       }
 
       sendStatus("Checking for updates...");
       
-      // FIX 2: SAFETY TIMEOUT
-      // If the updater hangs for 10 seconds, force the app to open
+      // Safety Timeout
       setTimeout(() => {
           console.log("Updater timed out. Forcing launch.");
           launchMainApp();
       }, 10000);
 
-      // Start the check
-      autoUpdater.checkForUpdatesAndNotify().catch(err => {
-          console.log("Update check issue:", err);
-          // Don't launch here, let the 'error' event or timeout handle it
-      });
+      autoUpdater.checkForUpdatesAndNotify().catch(err => console.log(err));
   });
 
-  // Event: No Update Found (Launch App)
+  // Events to switch to Main Window
   autoUpdater.on('update-not-available', () => {
       sendStatus("Up to date! Launching...");
       setTimeout(launchMainApp, 1500);
   });
 
-  // Event: Update Found (Download it)
-  autoUpdater.on('update-available', () => {
-      sendStatus("New version found. Downloading...");
-  });
-
-  // Event: Downloading Progress
-  autoUpdater.on('download-progress', (progressObj) => {
-      const log_message = `Downloading: ${progressObj.percent.toFixed(0)}%`;
-      sendStatus(log_message);
-  });
-
-  // Event: Update Downloaded (Restart)
-  autoUpdater.on('update-downloaded', () => {
-      sendStatus("Update Ready. Restarting...");
-      setTimeout(() => {
-          autoUpdater.quitAndInstall();
-      }, 2000);
-  });
-
-  // Event: Error (Launch App anyway)
   autoUpdater.on('error', (err) => {
       sendStatus("Update check failed. Launching...");
-      console.log(err);
-      setTimeout(launchMainApp, 2000);
+      setTimeout(launchMainApp, 1500);
+  });
+
+  // Standard Update Events
+  autoUpdater.on('update-available', () => sendStatus("New version found. Downloading..."));
+  autoUpdater.on('download-progress', (p) => sendStatus(`Downloading: ${p.percent.toFixed(0)}%`));
+  autoUpdater.on('update-downloaded', () => {
+      sendStatus("Update Ready. Restarting...");
+      setTimeout(() => autoUpdater.quitAndInstall(), 2000);
   });
 }
 
-// --- HANDLER 1: SEARCH MOVIES ---
+// --- HANDLERS ---
 ipcMain.handle('search-movies', async (event, query) => {
   try {
-    const activeProviders = TorrentSearchApi.getActiveProviders().map(p => p.name).join(', ');
-    console.log(`🔎 Searching for: "${query}" via [${activeProviders}]`);
-
-    // Fetch 100 results for pagination
-    const results = await TorrentSearchApi.search(query, 'All', 100);
-    console.log(`✅ Found ${results.length} raw results`);
-
+    const results = await TorrentSearchApi.search(query, 'All', 1000);
     return results.filter(t => {
-        const isVideo = /1080p|720p|480p|BluRay|WEBRip|H.264|x265|AVI|MKV|MP4/i.test(t.title);
-        return t.seeds > 0 && isVideo;
+       const isVideo = /1080p|720p|480p|BluRay|WEBRip|H.264|x265|AVI|MKV|MP4/i.test(t.title);
+       return t.seeds > 0 && isVideo;
     });
-
-  } catch (err) {
-    console.error("❌ Search Error:", err);
-    return [];
-  }
+  } catch (err) { return []; }
 });
 
-// --- HANDLER 2: SELECT FOLDER ---
 ipcMain.handle('select-folder', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-        properties: ['openDirectory']
-    });
+    const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
     if (result.canceled) return null;
-    
-    const newPath = result.filePaths[0];
-    saveConfig({ downloadPath: newPath });
-    return newPath;
+    saveConfig({ downloadPath: result.filePaths[0] });
+    return result.filePaths[0];
 });
 
-// --- HANDLER 3: GET CONFIG ---
-ipcMain.handle('get-config', () => {
-    return loadConfig();
-});
+ipcMain.handle('get-config', () => loadConfig());
 
-// --- HANDLER 4: START & RESUME DOWNLOAD ---
 ipcMain.on('start-download', (event, torrentData) => { startTorrent(event, torrentData); });
 ipcMain.on('resume-download', (event, torrentData) => { startTorrent(event, torrentData); });
 
-// --- HANDLER 5: PAUSE ---
 ipcMain.on('pause-download', (event, magnet) => {
     if (!magnet) return;
     const torrent = client.get(magnet);
     if (torrent) torrent.destroy();
 });
 
-// --- HANDLER 6: CANCEL ---
 ipcMain.on('cancel-download', (event, magnet) => {
     if (!magnet) return;
     const torrent = client.get(magnet);
     if (torrent) {
-        // Destroy and delete file
-        client.remove(magnet, { destroyStore: true }, (err) => {
-            if(!err) console.log("Deleted file");
-        });
+        client.remove(magnet, { destroyStore: true });
     }
 });
 
-// --- HANDLER 7: LOCATE FILE ---
-ipcMain.on('show-in-folder', (event, filePath) => {
-    shell.showItemInFolder(filePath);
-});
+ipcMain.on('show-in-folder', (event, filePath) => { shell.showItemInFolder(filePath); });
 
 // ---------------------------------------------------------
-// CORE DOWNLOAD FUNCTION
+// CORE DOWNLOAD FUNCTION (UPDATED FOR RESTORE)
 // ---------------------------------------------------------
-async function startTorrent(event, torrentData) {
+async function startTorrent(event, torrentData, isRestore = false) {
   const config = loadConfig();
   
-  // 1. Get Magnet
+  // If restoring, use the path saved in the file. Otherwise use default config.
+  const downloadLocation = (isRestore && torrentData.path) ? torrentData.path : config.downloadPath;
+
   let magnet = torrentData.magnet;
   if (!magnet) {
       try {
@@ -243,37 +230,38 @@ async function startTorrent(event, torrentData) {
           magnet = await TorrentSearchApi.getMagnet(torrentData);
           if (!magnet) throw new Error("Magnet link not found.");
       } catch (e) {
-          console.error("Failed to fetch magnet:", e);
-          mainWindow.webContents.send('download-error', { 
-              id: torrentData.id, 
-              message: "Failed to get Magnet. Check VPN." 
-          });
+          console.error(e);
+          if(mainWindow) mainWindow.webContents.send('download-error', { id: torrentData.id, message: "No Magnet" });
           return;
       }
   }
 
-  // 2. Check Duplicates
+  // Prevent duplicates
   if (client.get(magnet)) return; 
 
-  // 3. Start
-  client.add(magnet, { path: config.downloadPath }, (torrent) => {
+  // START DOWNLOAD
+  client.add(magnet, { path: downloadLocation }, (torrent) => {
     
-    // Send Magnet back to UI immediately
-    mainWindow.webContents.send('download-started', {
-        id: torrentData.id,
-        magnet: magnet
-    });
+    // Save metadata needed for restoring later
+    torrent.uiId = torrentData.id;       
+    torrent.uiTitle = torrentData.title; 
+
+    // IMPORTANT: Only tell UI "Started" if it's NEW (not restoring)
+    // If we are restoring, the UI gets the list separately via 'restore-downloads'
+    if (!isRestore && mainWindow) {
+        mainWindow.webContents.send('download-started', { id: torrentData.id, magnet: magnet });
+    }
     
     // Progress Loop
     const interval = setInterval(() => {
         if (!mainWindow || torrent.destroyed) return clearInterval(interval);
         
         mainWindow.webContents.send('download-progress', {
-            id: torrentData.id,
+            id: torrent.uiId, 
             progress: (torrent.progress * 100).toFixed(1),
-            speed: (torrent.downloadSpeed / 1024 / 1024).toFixed(2), // MB/s
-            downloaded: torrent.downloaded, // New: Bytes downloaded
-            total: torrent.length,          // New: Total file size
+            speed: (torrent.downloadSpeed / 1024 / 1024).toFixed(2),
+            downloaded: torrent.downloaded,
+            total: torrent.length,
             peers: torrent.numPeers,
             magnet: magnet 
         });
@@ -281,48 +269,19 @@ async function startTorrent(event, torrentData) {
         if (torrent.progress === 1) clearInterval(interval);
     }, 1000);
 
-    // Completion
     torrent.on('done', () => {
       const file = torrent.files.find(f => f.name.endsWith('.mp4') || f.name.endsWith('.mkv') || f.name.endsWith('.avi'));
+      const fullPath = file ? path.join(downloadLocation, file.path) : "";
       
-      let fullPath = "";
-      if (file) {
-          fullPath = path.join(config.downloadPath, file.path);
-      }
-
       mainWindow.webContents.send('download-complete', { 
-          id: torrentData.id,
-          title: torrentData.title,
+          id: torrent.uiId, 
+          title: torrent.uiTitle, 
           path: fullPath 
       });
     });
     
-    // Errors
     torrent.on('error', (err) => {
-        mainWindow.webContents.send('download-error', { 
-            id: torrentData.id, 
-            message: "Error: " + err.message 
-        });
+        mainWindow.webContents.send('download-error', { id: torrent.uiId, message: err.message });
     });
   });
 }
-
-// ---------------------------------------------------------
-// AUTO UPDATER EVENTS
-// ---------------------------------------------------------
-autoUpdater.on('update-available', () => {
-  mainWindow.webContents.send('update-message', 'New version available. Downloading...');
-});
-
-autoUpdater.on('update-downloaded', () => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Update Ready',
-    message: 'A new version has been downloaded. Restart now to install?',
-    buttons: ['Restart', 'Later']
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall();
-    }
-  });
-});

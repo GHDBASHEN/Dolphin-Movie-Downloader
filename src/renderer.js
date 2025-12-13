@@ -425,3 +425,27 @@ document.addEventListener('click', (event) => {
         sidebar.classList.remove('open');
     }
 });
+
+if (window.api.onRestore) {
+    window.api.onRestore((savedList) => {
+        console.log("Restoring session:", savedList);
+        
+        savedList.forEach(item => {
+            // Add card to UI
+            addToSidebar(item);
+            
+            // Track internally
+            activeDownloads.set(item.id, item);
+            
+            // Update status text
+            const speedText = document.getElementById(`speed-${item.id}`);
+            if (speedText) speedText.innerText = "Resuming...";
+        });
+
+        // Open Sidebar
+        if (savedList.length > 0) {
+            document.getElementById('downloadSidebar').classList.add('open');
+            updateBadge();
+        }
+    });
+}
