@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('api', {
   
   // NEW: Locate File
   showItemInFolder: (path) => ipcRenderer.send('show-in-folder', path),
+  previewFile: (id) => ipcRenderer.send('preview-file', id),
 
   // Listeners
   onStarted: (callback) => ipcRenderer.on('download-started', (event, data) => callback(data)),

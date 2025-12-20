@@ -362,6 +362,7 @@ td:nth-child(3) { color: #4caf50; } /* Seeds (Green) */
     border-radius: 6px;
     padding: 12px;
     margin-bottom: 10px;
+    transition: opacity 0.5s ease;
 }
 
 .card-title {
